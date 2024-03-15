@@ -1,0 +1,276 @@
+import mysql.connector as conn
+import os
+import sys
+
+baza_de_date = conn.connect(
+    host="localhost",
+    user="root",
+    passwd="password",
+    database="bd_proiect_spotify"
+)
+
+curs = baza_de_date.cursor()
+
+def citire():
+    print("Selectati un tabel din urmatoarele:")
+    curs.execute("SHOW TABLES")
+    for nume_tabel in curs:
+        print(nume_tabel[0])
+
+    tabel_selectat = input()
+
+    cod = "SELECT * FROM {}".format(tabel_selectat)
+
+    try:
+        curs.execute(cod)
+        rez = curs.fetchall()
+
+        for rand in rez:
+            print(rand)
+    except conn.Error as err:
+        print("Eroare MySQL:", err)
+        citire()
+    finally:
+        curs.reset()
+
+
+def citire_cu_sortare():
+    print("Selectati un tabel din urmatoarele:")
+    curs.execute("SHOW TABLES")
+    tabele = [tabel[0] for tabel in curs.fetchall()]
+    print(tabele)
+    tabel_selectat = input()
+    if tabel_selectat in tabele:
+        curs.execute("DESCRIBE {}".format(tabel_selectat))
+        coloane = [coloana[0] for coloana in curs.fetchall()]
+        print(coloane)
+        coloana_sortare = input("Introduceti numele coloanei dupa care doriti sa sortati:")
+        alegere = input("Doriti sa sortati ascendent(0) sau descendent(1)?")
+        if coloana_sortare not in coloane:
+            print("Coloana de sortare introdusa nu exista in tabel.")
+            return
+        cod_asc = "SELECT * FROM {} ORDER BY {}".format(tabel_selectat, coloana_sortare)
+        cod_desc = "SELECT * FROM {} ORDER BY {} DESC".format(tabel_selectat, coloana_sortare)
+        try:
+            if alegere == "0":
+                curs.execute(cod_asc)
+            else:
+                curs.execute(cod_desc)
+            rez = curs.fetchall()
+            for rand in rez:
+                print(rand)
+        except conn.Error as err:
+            print("Eroare MySQL:", err)
+            citire_cu_sortare()
+        finally:
+            curs.reset()
+    else:
+        print("Numele tabelului introdus nu exista sau nu este valid.")
+
+
+#c)filtrare din 3 table
+#melodiile instrumentale care deschid un album, albumul din care fac parte, numele artistului care a facut albumul
+def nr_melodii_artisti():
+    print("Melodiile instrumentale care deschid un album, albumul din care fac parte, numele artistului care a facut albumul:")
+    cod = (
+        "SELECT a.nume_artist, al.nume_album, m.nume_melodie "
+        "FROM artist a "
+        "JOIN album al ON a.artist_spotify_id = al.artist_spotify_id "
+        "JOIN melodie m ON al.upc = m.upc_album "
+        "WHERE m.limba IS NULL AND m.index_album = 1;"
+    )
+    curs.execute(cod)
+    rez = curs.fetchall()
+    for rand in rez:
+        print(rand)
+    curs.reset()
+
+#d)functii grup si having
+#artistii care au un numar total de melodii pare si numarul de melodii al acestora ordonati descrescator dupa numarul de melodii
+def statistici_artisti():
+    print("Artistii care au un numar total de melodii pare si numarul de melodii al acestora ordonati descrescator dupa numarul de melodii")
+    cod = (
+        "WITH nr_melodii_per_album AS ("
+        "   SELECT al1.upc AS cod_album, COUNT(m.upc_album) AS nr_melod, al1.artist_spotify_id AS id_artist "
+        "   FROM album al1 "
+        "   JOIN melodie m ON al1.upc = m.upc_album "
+        "   GROUP BY al1.upc, m.upc_album, al1.artist_spotify_id"
+        ")"
+        "SELECT a.nume_artist AS nume_artist, SUM(nr_melodii_per_album.nr_melod) AS numar_melodii "
+        "FROM nr_melodii_per_album "
+        "JOIN artist a ON a.artist_spotify_id = nr_melodii_per_album.id_artist "
+        "GROUP BY a.nume_artist "
+        "HAVING SUM(nr_melodii_per_album.nr_melod) % 2 = 0 "
+        "ORDER BY SUM(nr_melodii_per_album.nr_melod) DESC;"
+    )
+
+    curs.execute(cod)
+    rez = curs.fetchall()
+    for rand in rez:
+        print(rand)
+    curs.reset()
+
+
+#vizualizare compusa
+#sa se afiseze utilizatorii cu toate dispozitivele lor
+def utiliz_disp():
+    print("Sa se afiseze utilizatorii cu toate dispozitivele lor")
+    cod = (
+        "SELECT u.nume_utilizator, d.tip, d.marca, d.model "
+        "FROM utilizator u "
+        "JOIN dispozitiv d ON u.id_utilizator = d.id_utilizator_proprietar "
+    )
+    curs.execute(cod)
+    rez = curs.fetchall()
+    for rand in rez:
+        print(rand)
+    curs.reset()
+
+#vizualizare complexa
+# sa se afiseze numele artistului, numarul de pagini pe care le detine, numarul de pagini pe care este verificat si numarul de pagini in care este monetizat
+def statistici_pagini():
+    print("Sa se afiseze numele artistului, numarul de pagini pe care le detine, numarul de pagini pe care este verificat si numarul de pagini in care este monetizat")
+    cod_viz = (
+        "CREATE OR REPLACE VIEW statistici_pagini_web AS "
+        "SELECT a.nume_artist, COUNT(ap.url_pagina) AS nr_pag, SUM(ap.statut_de_verificare) AS nr_pag_verif, SUM(ap.monetizare) AS nr_pag_monetiz "
+        "FROM artist a "
+        "JOIN artist_pagina ap ON a.artist_spotify_id = ap.artist_spotify_id "
+        "GROUP BY a.nume_artist; "
+    )
+
+    cod_selectie = "SELECT * FROM statistici_pagini_web; "
+
+    curs.execute(cod_viz)
+    curs.reset()
+
+    curs.execute(cod_selectie)
+    rez = curs.fetchall()
+    for rand in rez:
+        print(rand)
+    curs.reset()
+
+
+def actualizare_date():
+    print("Pentru a iesi, tastati orice altceva decat numele tabelelor afisate, de preferat tastati cuvantul inapoi")
+    curs.execute("SHOW TABLES")
+    tabele = [tabel[0] for tabel in curs.fetchall()]
+    print("Selectati un tabel pentru a-l actualiza din urmatoarele:")
+    print(tabele)
+    tabel_selectat = input()
+
+    if tabel_selectat in tabele:
+        curs.execute("DESCRIBE {}".format(tabel_selectat))
+        coloane = [coloana[0] for coloana in curs.fetchall()]
+        print(coloane)
+        coloana_actualizare = input("Introduceti numele coloanei pe care doriti sa o actualizati:")
+
+        if coloana_actualizare not in coloane:
+            print("Coloana introdusa nu exista in tabel.")
+            return
+
+        schimbare = input("Introduceti valoarea cu care schimbati: ")
+        identif_col = input("Introduceti numele coloanei cu care identificati valoarea/valorile: ")
+        identif_lin = input("Introduceti numele linei/liniilor care trebuie modificate: ")
+        try:
+            cod = "UPDATE {} SET {} = '{}' WHERE {} = '{}' ".format(tabel_selectat, coloana_actualizare,schimbare, identif_col, identif_lin)
+            curs.execute(cod)
+            baza_de_date.commit()
+            rez = curs.fetchall()
+            for rand in rez:
+                print(rand)
+        except conn.Error as err:
+            print("Eroare MySQL:", err)
+            stergere()
+        finally:
+            curs.reset()
+
+    else:
+        print("Numele tabelului introdus nu exista sau nu este valid.")
+
+def stergere():
+    print("Pentru a iesi, tastati orice altceva decat numele tabelelor afisate, de preferat tastati cuvantul inapoi")
+    curs.execute("SHOW TABLES")
+    tabele = [tabel[0] for tabel in curs.fetchall()]
+    print(tabele)
+    tabel_selectat = input("Selectati un tabel pentru a-i sterge o valoare:")
+
+    if tabel_selectat in tabele:
+        curs.execute("DESCRIBE {}".format(tabel_selectat))
+        coloane = [coloana[0] for coloana in curs.fetchall()]
+        print(coloane)
+
+        identif_col = input("Introduceti numele coloanei cu care identificati valoarea/valorile: ")
+        identif_lin = input("Introduceti valoarea/valorile care identifica linia: ")
+        try:
+            cod = "DELETE FROM {} WHERE {} = '{}'".format(tabel_selectat,identif_col,identif_lin)
+            curs.execute(cod)
+            baza_de_date.commit()
+            rez = curs.fetchall()
+            for rand in rez:
+                print(rand)
+
+        except conn.Error as err:
+            print("Eroare MySQL:", err)
+            stergere()
+        finally:
+            curs.reset()
+    else:
+        print("Numele tabelului introdus nu exista sau nu este valid.")
+
+def afisMeniu():
+    print("1.Citire fara sortare.")
+    print("2.Citire cu sortare.")
+    print("3.Edit.")
+    print("4.Stergere.")
+    print("5.c)Melodiile instrumentale care deschid un album.")
+    print("6.d)Artistii cu numar de melodii par.")
+    print("7.Vizualizare compusa.")
+    print("8.Vizualizare complexa.")
+    print("9.Iesire.")
+
+def alegere():
+    introd = input("Alegeti o optiune: ")
+    if introd == '1':
+        citire()
+        os.system('cls')
+
+    elif introd == '2':
+        citire_cu_sortare()
+        os.system('cls')
+
+    elif introd == '3':
+        actualizare_date()
+        os.system('cls')
+
+    elif introd == '4':
+        stergere()
+        os.system('cls')
+
+    elif introd == '5':
+        nr_melodii_artisti()
+        os.system('cls')
+
+    elif introd == '6':
+        statistici_artisti()
+        os.system('cls')
+
+    elif introd == '7':
+        utiliz_disp()
+        os.system('cls')
+
+    elif introd == '8':
+        statistici_pagini()
+        os.system('cls')
+    elif introd == '9':
+        sys.exit()
+
+    else:
+        print("Alegeti o optiune valida!")
+        alegere()
+
+def rulareInterf():
+    afisMeniu()
+    while True:
+        alegere()
+
+rulareInterf()

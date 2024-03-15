@@ -1,0 +1,60 @@
+-- c)
+
+SELECT a.nume_artist, al.nume_album, m.nume_melodie
+FROM artist a
+JOIN album al ON a.artist_spotify_id = al.artist_spotify_id
+JOIN melodie m ON al.upc = m.upc_album
+WHERE m.limba IS NULL AND m.index_album = 1;
+
+-- d)
+
+WITH nr_melodii_per_album AS (
+	SELECT al1.upc AS cod_album, count(m.upc_album) AS nr_melod, al1.artist_spotify_id AS id_artist
+    FROM album al1
+    JOIN melodie m ON al1.upc = m.upc_album
+    GROUP BY al1.upc, m.upc_album, al1.artist_spotify_id
+) 
+
+SELECT a.nume_artist AS nume_artist, sum(nr_melodii_per_album.nr_melod) AS numar_melodii
+FROM nr_melodii_per_album
+JOIN artist a ON a.artist_spotify_id = nr_melodii_per_album.id_artist
+GROUP BY a.nume_artist
+HAVING sum(nr_melodii_per_album.nr_melod) % 2 = 0
+ORDER BY sum(nr_melodii_per_album.nr_melod) DESC;
+
+-- f)
+
+-- compusa
+
+CREATE OR REPLACE VIEW date_dispozitive AS (
+	SELECT u.nume_utilizator, d.tip, d.marca, d.model
+	FROM utilizator u
+	JOIN dispozitiv d ON u.id_utilizator = d.id_utilizator_proprietar
+);
+
+SELECT * FROM date_dispozitive;
+
+-- complexa
+
+CREATE OR REPLACE VIEW statistici_pagini_web AS
+SELECT a.nume_artist, COUNT(ap.url_pagina) AS nr_pag, SUM(ap.statut_de_verificare) AS nr_pag_verif, SUM(ap.monetizare) AS nr_pag_monetiz
+FROM artist a
+JOIN artist_pagina ap ON a.artist_spotify_id = ap.artist_spotify_id
+GROUP BY a.nume_artist;
+
+SELECT * FROM statistici_pagini_web;
+
+
+
+
+-- complexa
+
+CREATE OR REPLACE VIEW statistici_pagini_web AS
+SELECT a.nume_artist, COUNT(ap.url_pagina) AS nr_pag, SUM(ap.statut_de_verificare) AS nr_pag_verif, SUM(ap.monetizare) AS nr_pag_monetiz
+FROM artist a
+JOIN artist_pagina ap ON a.artist_spotify_id = ap.artist_spotify_id
+GROUP BY a.nume_artist;
+
+SELECT * FROM statistici_pagini_web;
+
+
